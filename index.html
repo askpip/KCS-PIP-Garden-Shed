@@ -15,6 +15,8 @@
     --wood-dark:#4a2f1c; --wood:#7c4d2c; --wood-light:#a06f43;
     --cream:#faf3e3; --ink:#3a2a1c; --moss:#5f7a44; --terracotta:#bf4e2c;
     --page-bg:#eee3cf; --card:#fffaf0; --shadow:rgba(40,25,10,.35);
+    /* Ask Pip's own light-green border color, matched from app.askpip.garden. */
+    --pip-border:#c7ddc2;
   }
   *{box-sizing:border-box;}
   html, body{ height:100%; }
@@ -120,7 +122,7 @@
   .overlay .scrim{ position:absolute; inset:0; background:rgba(15,9,4,.55); }
   .overlay .panel{
     position:relative; z-index:2; width:100%; max-width:1300px; height:100%; max-height:94%; overflow:auto;
-    background:rgba(250,243,227,.42); border:4px solid var(--wood);
+    background:rgba(250,243,227,.22); border:4px solid var(--pip-border);
     -webkit-backdrop-filter:blur(7px); backdrop-filter:blur(7px);
     padding:16px 16px 20px; border-radius:16px;
     box-shadow:0 25px 60px -12px rgba(0,0,0,.65);
@@ -138,7 +140,7 @@
   .folder-list{ display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:12px; }
   .folder-card{
     display:flex; flex-direction:column; align-items:flex-start; gap:4px; text-align:left;
-    background:var(--card); border:1px solid rgba(90,60,30,.2); border-radius:10px;
+    background:var(--card); border:1px solid var(--pip-border); border-radius:10px;
     padding:14px; cursor:pointer; font-family:'Nunito',sans-serif;
   }
   .folder-card:hover{ background:#fff; box-shadow:0 2px 6px rgba(0,0,0,.15); }
@@ -147,7 +149,7 @@
   .folder-card .folder-count{ font-size:.75rem; color:var(--wood); }
   .backbtn{
     font-family:'Nunito',sans-serif; font-weight:700; font-size:.8rem; cursor:pointer;
-    background:transparent; border:1.5px solid var(--wood); color:var(--wood-dark);
+    background:transparent; border:1.5px solid var(--pip-border); color:var(--wood-dark);
     border-radius:8px; padding:6px 10px; margin-bottom:10px;
   }
   .empty-note{ font-family:'Kalam',cursive; color:var(--wood-dark); opacity:.8; margin:6px 2px 14px; }
@@ -155,7 +157,7 @@
   .item-list{ display:grid; gap:8px; }
   .item-group{ display:grid; gap:0; }
   .item-card{
-    text-align:left; width:100%; background:var(--card); border:1px solid rgba(90,60,30,.2); border-radius:8px;
+    text-align:left; width:100%; background:var(--card); border:1px solid var(--pip-border); border-radius:8px;
     padding:10px 12px; cursor:pointer; font-family:'Nunito',sans-serif; font-size:.9rem;
   }
   .item-card b{ display:block; font-family:'Kalam',cursive; font-size:1rem; color:var(--wood-dark); margin-bottom:2px; }
@@ -165,26 +167,26 @@
   }
 
   .detail{
-    background:var(--card); border:1px solid rgba(90,60,30,.2); border-top:none;
+    background:var(--card); border:1px solid var(--pip-border); border-top:none;
     border-radius:0 0 8px 8px; padding:0 12px 12px; display:none;
   }
   .item-group.open .detail{ display:block; }
   .detail .actions{
     display:flex; gap:8px; flex-wrap:wrap;
     position:sticky; top:0; z-index:1; background:var(--card);
-    margin:0 -12px 10px; padding:10px 12px 8px; border-bottom:1px solid rgba(90,60,30,.15);
+    margin:0 -12px 10px; padding:10px 12px 8px; border-bottom:1px solid var(--pip-border);
   }
   .btn{
     font-family:'Nunito',sans-serif; font-weight:700; font-size:.85rem; border:none;
     border-radius:8px; padding:8px 12px; cursor:pointer; background:var(--moss); color:#fff;
   }
   .btn.alt{ background:var(--terracotta); }
-  .btn.ghost{ background:transparent; border:1.5px solid var(--wood); color:var(--wood-dark); }
+  .btn.ghost{ background:transparent; border:1.5px solid var(--pip-border); color:var(--wood-dark); }
   .btn.danger{ background:#a33; }
 
   .edit-mode input[type=text], .edit-mode textarea{
     width:100%; font-family:'Kalam',cursive; font-size:1rem; padding:8px 10px; margin-bottom:8px;
-    border:1px solid rgba(90,60,30,.3); border-radius:8px; background:#fffef8; box-sizing:border-box;
+    border:1px solid var(--pip-border); border-radius:8px; background:#fffef8; box-sizing:border-box;
   }
   .edit-mode textarea{ min-height:140px; resize:vertical; }
 
@@ -198,11 +200,11 @@
 
   .create-form textarea{
     width:100%; min-height:160px; font-family:'Kalam',cursive; font-size:1rem; padding:10px;
-    border:1px solid rgba(90,60,30,.3); border-radius:8px; background:#fffef8; resize:vertical;
+    border:1px solid var(--pip-border); border-radius:8px; background:#fffef8; resize:vertical;
   }
   .create-form input[type=text]{
     width:100%; font-family:'Kalam',cursive; font-size:1.05rem; padding:8px 10px; margin-bottom:8px;
-    border:1px solid rgba(90,60,30,.3); border-radius:8px; background:#fffef8;
+    border:1px solid var(--pip-border); border-radius:8px; background:#fffef8;
   }
 
   .hint{ text-align:center; font-size:.82rem; color:#6b5a44; margin-top:10px; }
