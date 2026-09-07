@@ -180,6 +180,13 @@
   }
   .btn.alt{ background:var(--terracotta); }
   .btn.ghost{ background:transparent; border:1.5px solid var(--wood); color:var(--wood-dark); }
+  .btn.danger{ background:#a33; }
+
+  .edit-mode input[type=text], .edit-mode textarea{
+    width:100%; font-family:'Kalam',cursive; font-size:1rem; padding:8px 10px; margin-bottom:8px;
+    border:1px solid rgba(90,60,30,.3); border-radius:8px; background:#fffef8; box-sizing:border-box;
+  }
+  .edit-mode textarea{ min-height:140px; resize:vertical; }
 
   /* Expanded viewable doc overlay (opened via "Send to desk") */
   .doc-panel{ max-height:94%; max-width:900px; }
@@ -323,7 +330,7 @@
     (rows || []).forEach(function(row){
       var loc = row.location;
       if(!CONTENT[loc]) return;
-      CONTENT[loc].items.push({ id: row.id, title: row.title, body: row.body, folder: row.folder });
+      CONTENT[loc].items.push({ id: row.id, title: row.title, body: row.body, folder: row.folder, source: row.source });
     });
   }
 
@@ -530,7 +537,10 @@
     }
     overlay.querySelector(".closebtn").addEventListener("click", close);
 
-    function renderItemList(items, title, onBack){
+    // getItems is a function (not a plain array) so the list can be recomputed fresh
+    // after an edit/delete changes the underlying CONTENT arrays.
+    function renderItemList(getItems, title, onBack){
+      var items = getItems();
       titleEl.textContent = title;
       panelBody.innerHTML = "";
 
@@ -550,6 +560,8 @@
         panelBody.appendChild(empty);
       }
 
+      function refresh(){ renderItemList(getItems, title, onBack); }
+
       var list = document.createElement("div");
       list.className = "item-list";
       items.forEach(function(item){
@@ -561,10 +573,25 @@
         card.className = "item-card";
         card.innerHTML = "<b>" + item.title + "</b>" + item.body.slice(0, 60) + (item.body.length > 60 ? "..." : "");
 
+        var editable = item.source === "user";
         var detail = document.createElement("div");
         detail.className = "detail";
-        detail.innerHTML = '<div class="actions"><button class="btn send">Send to desk</button><button class="btn ghost close-item">Close</button></div>' +
-          '<p style="margin:0;">' + item.body + '</p>';
+        detail.innerHTML =
+          '<div class="actions">' +
+            '<button class="btn send">Send to desk</button>' +
+            (editable ? '<button class="btn ghost edit-item">Edit</button><button class="btn danger delete-item">Delete</button>' : '') +
+            '<button class="btn ghost close-item">Close</button>' +
+          '</div>' +
+          '<div class="view-mode"><p style="margin:0;">' + item.body + '</p></div>' +
+          (editable ?
+            '<div class="edit-mode" style="display:none;">' +
+              '<input type="text" class="edit-title" value="">' +
+              '<textarea class="edit-body"></textarea>' +
+              '<div class="actions" style="border-bottom:none;margin-bottom:0;">' +
+                '<button class="btn save-item">Save</button>' +
+                '<button class="btn ghost cancel-edit">Cancel</button>' +
+              '</div>' +
+            '</div>' : '');
 
         detail.querySelector(".send").addEventListener("click", function(){
           showOnDesk(stageEl, item.title, item.body);
@@ -574,6 +601,56 @@
         detail.querySelector(".close-item").addEventListener("click", function(){
           group.classList.remove("open");
         });
+
+        if(editable){
+          var viewMode = detail.querySelector(".view-mode");
+          var editMode = detail.querySelector(".edit-mode");
+          var titleIn = detail.querySelector(".edit-title");
+          var bodyIn = detail.querySelector(".edit-body");
+
+          detail.querySelector(".edit-item").addEventListener("click", function(){
+            titleIn.value = item.title;
+            bodyIn.value = item.body;
+            viewMode.style.display = "none";
+            editMode.style.display = "block";
+          });
+          detail.querySelector(".cancel-edit").addEventListener("click", function(){
+            editMode.style.display = "none";
+            viewMode.style.display = "block";
+          });
+          detail.querySelector(".save-item").addEventListener("click", function(){
+            var newTitle = titleIn.value.trim() || "Untitled";
+            var newBody = bodyIn.value.trim() || "(no content yet)";
+            var saveBtn = detail.querySelector(".save-item");
+            saveBtn.disabled = true;
+            sb.rpc("shed_update_item", { p: window.SHED_PASSPHRASE, item_id: item.id, ttl: newTitle, bdy: newBody }).then(function(res){
+              saveBtn.disabled = false;
+              if(res.error){
+                alert("Couldn't save those changes. Please try again.");
+                return;
+              }
+              item.title = res.data.title;
+              item.body = res.data.body;
+              refresh();
+            });
+          });
+          detail.querySelector(".delete-item").addEventListener("click", function(){
+            if(!confirm('Delete "' + item.title + '"? This can\'t be undone.')) return;
+            var delBtn = detail.querySelector(".delete-item");
+            delBtn.disabled = true;
+            sb.rpc("shed_delete_item", { p: window.SHED_PASSPHRASE, item_id: item.id }).then(function(res){
+              delBtn.disabled = false;
+              if(res.error){
+                alert("Couldn't delete that. Please try again.");
+                return;
+              }
+              var arr = CONTENT[key].items;
+              var idx = arr.findIndex(function(it){ return it.id === item.id; });
+              if(idx > -1) arr.splice(idx, 1);
+              refresh();
+            });
+          });
+        }
 
         card.addEventListener("click", function(){
           var willOpen = !group.classList.contains("open");
@@ -607,7 +684,10 @@
             '<span class="folder-name">' + f.name + '</span>' +
             '<span class="folder-count">' + items.length + (items.length === 1 ? " document" : " documents") + '</span>';
           card.addEventListener("click", function(){
-            renderItemList(items, data.title + " – " + f.name, renderFolders);
+            function getFolderItems(){
+              return data.items.filter(function(it){ return (it.folder || CABINET_DEFAULT_FOLDER) === f.name; });
+            }
+            renderItemList(getFolderItems, data.title + " – " + f.name, renderFolders);
           });
           grid.appendChild(card);
         });
@@ -615,7 +695,7 @@
       }
       renderFolders();
     } else {
-      renderItemList(data.items, data.title, null);
+      renderItemList(function(){ return data.items; }, data.title, null);
     }
   }
 
@@ -659,7 +739,7 @@
           return;
         }
         var row = res.data;
-        CONTENT.board.items.unshift({ id: row.id, title: row.title, body: row.body });
+        CONTENT.board.items.unshift({ id: row.id, title: row.title, body: row.body, source: row.source });
         showOnDesk(stageEl, "Pinned: " + entry.title, "Added to the Notice Board.");
         close();
       });
@@ -675,7 +755,7 @@
           return;
         }
         var row = res.data;
-        CONTENT.cabinet.items.unshift({ id: row.id, title: row.title, body: row.body, folder: row.folder });
+        CONTENT.cabinet.items.unshift({ id: row.id, title: row.title, body: row.body, folder: row.folder, source: row.source });
         showOnDesk(stageEl, "Filed: " + entry.title, 'Added to the File Cabinet, under "From the Desk".');
         close();
       });
