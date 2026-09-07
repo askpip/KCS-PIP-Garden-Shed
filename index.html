@@ -166,6 +166,8 @@
     border-radius:8px 8px 0 0; background:#fff; box-shadow:0 2px 6px rgba(0,0,0,.15);
   }
 
+  .actions{ display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px; }
+
   .detail{
     background:var(--card); border:1px solid var(--pip-border); border-top:none;
     border-radius:0 0 8px 8px; padding:0 12px 12px; display:none;
@@ -332,7 +334,7 @@
     (rows || []).forEach(function(row){
       var loc = row.location;
       if(!CONTENT[loc]) return;
-      CONTENT[loc].items.push({ id: row.id, title: row.title, body: row.body, folder: row.folder, source: row.source });
+      CONTENT[loc].items.push({ id: row.id, title: row.title, body: row.body, folder: row.folder, source: row.source, loc: loc });
     });
   }
 
@@ -468,22 +470,26 @@
     note.querySelector(".close-note").addEventListener("click", function(){ note.classList.remove("show"); });
     note.querySelector(".expand-btn").addEventListener("click", function(){
       var s = stageEl._deskState;
-      if(s){ openDeskDoc(stageEl, s.title, s.body); }
+      if(s){ openDeskDoc(stageEl, s); }
     });
     stageEl.appendChild(note);
     stageEl._deskNote = note;
   });
 
-  function showOnDesk(stageEl, title, body){
-    stageEl._deskState = {title:title, body:body};
+  // item is {title, body} for a plain status toast (e.g. "Pinned: ..."), or a full item
+  // ({id, title, body, source, loc, ...}) when a real notice/document was sent to the desk.
+  function showOnDesk(stageEl, item){
+    stageEl._deskState = item;
     var note = stageEl._deskNote;
-    note.querySelector("h4").textContent = title;
-    note.querySelector(".body").textContent = body.length > 90 ? body.slice(0,90) + "..." : body;
+    note.querySelector("h4").textContent = item.title;
+    note.querySelector(".body").textContent = item.body.length > 90 ? item.body.slice(0,90) + "..." : item.body;
     note.classList.add("show");
   }
 
   // Full-page viewable document overlay, opened by "Send to desk" or by expanding the desk note.
-  function openDeskDoc(stageEl, title, body){
+  // When the item is one the Founder created (source === "user"), Edit/Delete are offered here too.
+  function openDeskDoc(stageEl, item){
+    var editable = item.source === "user" && item.id;
     var overlay = document.createElement("div");
     overlay.className = "overlay";
     overlay.innerHTML =
@@ -491,10 +497,17 @@
       '<div class="scrim"></div>' +
       '<div class="panel doc-panel">' +
         '<div class="panel-head"><h3>On the Desk</h3><button class="closebtn" type="button">&times;</button></div>' +
-        '<div class="doc-page"><h4></h4><div class="body"></div></div>' +
+        (editable ? '<div class="actions"><button class="btn ghost edit-item">Edit</button><button class="btn danger delete-item">Delete</button></div>' : '') +
+        '<div class="doc-page view-mode"><h4></h4><div class="body"></div></div>' +
+        (editable ?
+          '<div class="edit-mode" style="display:none;">' +
+            '<input type="text" class="edit-title">' +
+            '<textarea class="edit-body" style="min-height:220px;"></textarea>' +
+            '<div class="actions"><button class="btn save-item">Save</button><button class="btn ghost cancel-edit">Cancel</button></div>' +
+          '</div>' : '') +
       '</div>';
-    overlay.querySelector(".doc-page h4").textContent = title;
-    overlay.querySelector(".doc-page .body").textContent = body;
+    overlay.querySelector(".doc-page h4").textContent = item.title;
+    overlay.querySelector(".doc-page .body").textContent = item.body;
     stageEl.appendChild(overlay);
     requestAnimationFrame(function(){ overlay.classList.add("open"); });
     function close(){
@@ -502,6 +515,70 @@
       setTimeout(function(){ overlay.remove(); }, 250);
     }
     overlay.querySelector(".closebtn").addEventListener("click", close);
+
+    if(editable){
+      var viewMode = overlay.querySelector(".view-mode");
+      var editMode = overlay.querySelector(".edit-mode");
+      var titleIn = overlay.querySelector(".edit-title");
+      var bodyIn = overlay.querySelector(".edit-body");
+
+      overlay.querySelector(".edit-item").addEventListener("click", function(){
+        titleIn.value = item.title;
+        bodyIn.value = item.body;
+        viewMode.style.display = "none";
+        editMode.style.display = "block";
+      });
+      overlay.querySelector(".cancel-edit").addEventListener("click", function(){
+        editMode.style.display = "none";
+        viewMode.style.display = "block";
+      });
+      overlay.querySelector(".save-item").addEventListener("click", function(){
+        var newTitle = titleIn.value.trim() || "Untitled";
+        var newBody = bodyIn.value.trim() || "(no content yet)";
+        var saveBtn = overlay.querySelector(".save-item");
+        saveBtn.disabled = true;
+        sb.rpc("shed_update_item", { p: window.SHED_PASSPHRASE, item_id: item.id, ttl: newTitle, bdy: newBody }).then(function(res){
+          saveBtn.disabled = false;
+          if(res.error){
+            alert("Couldn't save those changes. Please try again.");
+            return;
+          }
+          item.title = res.data.title;
+          item.body = res.data.body;
+          if(item.loc && CONTENT[item.loc]){
+            var found = CONTENT[item.loc].items.find(function(it){ return it.id === item.id; });
+            if(found){ found.title = item.title; found.body = item.body; }
+          }
+          overlay.querySelector(".view-mode h4").textContent = item.title;
+          overlay.querySelector(".view-mode .body").textContent = item.body;
+          if(stageEl._deskState && stageEl._deskState.id === item.id){ showOnDesk(stageEl, item); }
+          editMode.style.display = "none";
+          viewMode.style.display = "block";
+        });
+      });
+      overlay.querySelector(".delete-item").addEventListener("click", function(){
+        if(!confirm('Delete "' + item.title + '"? This can\'t be undone.')) return;
+        var delBtn = overlay.querySelector(".delete-item");
+        delBtn.disabled = true;
+        sb.rpc("shed_delete_item", { p: window.SHED_PASSPHRASE, item_id: item.id }).then(function(res){
+          delBtn.disabled = false;
+          if(res.error){
+            alert("Couldn't delete that. Please try again.");
+            return;
+          }
+          if(item.loc && CONTENT[item.loc]){
+            var arr = CONTENT[item.loc].items;
+            var idx = arr.findIndex(function(it){ return it.id === item.id; });
+            if(idx > -1) arr.splice(idx, 1);
+          }
+          if(stageEl._deskState && stageEl._deskState.id === item.id){
+            stageEl._deskState = null;
+            stageEl._deskNote.classList.remove("show");
+          }
+          close();
+        });
+      });
+    }
   }
 
   // The File Cabinet is organized into named folders. Existing cabinet documents were filed
@@ -596,9 +673,9 @@
             '</div>' : '');
 
         detail.querySelector(".send").addEventListener("click", function(){
-          showOnDesk(stageEl, item.title, item.body);
+          showOnDesk(stageEl, item);
           close();
-          openDeskDoc(stageEl, item.title, item.body);
+          openDeskDoc(stageEl, item);
         });
         detail.querySelector(".close-item").addEventListener("click", function(){
           group.classList.remove("open");
@@ -741,8 +818,8 @@
           return;
         }
         var row = res.data;
-        CONTENT.board.items.unshift({ id: row.id, title: row.title, body: row.body, source: row.source });
-        showOnDesk(stageEl, "Pinned: " + entry.title, "Added to the Notice Board.");
+        CONTENT.board.items.unshift({ id: row.id, title: row.title, body: row.body, source: row.source, loc: "board" });
+        showOnDesk(stageEl, {title: "Pinned: " + entry.title, body: "Added to the Notice Board."});
         close();
       });
     });
@@ -757,8 +834,8 @@
           return;
         }
         var row = res.data;
-        CONTENT.cabinet.items.unshift({ id: row.id, title: row.title, body: row.body, folder: row.folder, source: row.source });
-        showOnDesk(stageEl, "Filed: " + entry.title, 'Added to the File Cabinet, under "From the Desk".');
+        CONTENT.cabinet.items.unshift({ id: row.id, title: row.title, body: row.body, folder: row.folder, source: row.source, loc: "cabinet" });
+        showOnDesk(stageEl, {title: "Filed: " + entry.title, body: 'Added to the File Cabinet, under "From the Desk".'});
         close();
       });
     });
