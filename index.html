@@ -34,13 +34,16 @@
   .scene-bg{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; display:block; }
   /* On phones, a plain edge-to-edge crop of the office scene cuts off the bookshelf on the
      right. Here (main app view only, not the lock screen) we zoom the art out a little so a
-     slice of the bookshelf shows, accepting small top/bottom margins on this one view.
-     Nudge height/top/left together (and the bookshelf/cabinet/board/rug hotspot cx/cy values
+     slice of the bookshelf shows. Sized from WIDTH (not height) on purpose: that guarantees
+     the art always spans the full screen width on any phone shape, so any margin this
+     introduces can only ever show up above/below the art, never at the sides.
+     Nudge width/left together (and the bookshelf/cabinet/board/rug hotspot cx/cy values
      below) if it needs retuning. */
   #stageMobile{ background:var(--wood-dark); }
   #stageMobile .scene-bg{
-    top:12.5dvh; left:-4.4dvh; right:auto; bottom:auto;
-    width:auto; height:75dvh;
+    top:50%; left:-9.5%; right:auto; bottom:auto;
+    width:121.8%; height:auto;
+    transform:translateY(-50%);
   }
 
   @media (min-width: 760px){
