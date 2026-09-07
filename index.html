@@ -134,6 +134,24 @@
     background:var(--wood-dark); color:var(--cream); border:none; width:30px; height:30px;
     border-radius:50%; font-size:1rem; cursor:pointer; line-height:1;
   }
+  /* File Cabinet folder menu */
+  .folder-list{ display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:12px; }
+  .folder-card{
+    display:flex; flex-direction:column; align-items:flex-start; gap:4px; text-align:left;
+    background:var(--card); border:1px solid rgba(90,60,30,.2); border-radius:10px;
+    padding:14px; cursor:pointer; font-family:'Nunito',sans-serif;
+  }
+  .folder-card:hover{ background:#fff; box-shadow:0 2px 6px rgba(0,0,0,.15); }
+  .folder-card .folder-icon{ font-size:1.6rem; }
+  .folder-card .folder-name{ font-family:'Kalam',cursive; font-size:1rem; color:var(--wood-dark); }
+  .folder-card .folder-count{ font-size:.75rem; color:var(--wood); }
+  .backbtn{
+    font-family:'Nunito',sans-serif; font-weight:700; font-size:.8rem; cursor:pointer;
+    background:transparent; border:1.5px solid var(--wood); color:var(--wood-dark);
+    border-radius:8px; padding:6px 10px; margin-bottom:10px;
+  }
+  .empty-note{ font-family:'Kalam',cursive; color:var(--wood-dark); opacity:.8; margin:6px 2px 14px; }
+
   .item-list{ display:grid; gap:8px; }
   .item-group{ display:grid; gap:0; }
   .item-card{
@@ -305,7 +323,7 @@
     (rows || []).forEach(function(row){
       var loc = row.location;
       if(!CONTENT[loc]) return;
-      CONTENT[loc].items.push({ id: row.id, title: row.title, body: row.body });
+      CONTENT[loc].items.push({ id: row.id, title: row.title, body: row.body, folder: row.folder });
     });
   }
 
@@ -477,6 +495,17 @@
     overlay.querySelector(".closebtn").addEventListener("click", close);
   }
 
+  // The File Cabinet is organized into named folders. Existing cabinet documents were filed
+  // under "PIP AI OS"; anything filed from the desk pad lands in "From the Desk" automatically.
+  // "Company Docs" and "Drafts" start empty, ready for whatever gets added later.
+  var CABINET_FOLDERS = [
+    {name:"PIP AI OS", icon:"🤖"},
+    {name:"Company Docs", icon:"🏢"},
+    {name:"From the Desk", icon:"🗒️"},
+    {name:"Drafts", icon:"✏️"}
+  ];
+  var CABINET_DEFAULT_FOLDER = "Company Docs";
+
   function openPanel(key, stageEl){
     if(key === "deskpad"){ openCreatePanel(stageEl); return; }
     var data = CONTENT[key];
@@ -486,17 +515,44 @@
       '<div class="bg" style="background-image:url(' + data.bg + ')"></div>' +
       '<div class="scrim"></div>' +
       '<div class="panel">' +
-        '<div class="panel-head"><h3>' + data.title + '</h3><button class="closebtn" type="button">&times;</button></div>' +
-        '<div class="item-list"></div>' +
+        '<div class="panel-head"><h3></h3><button class="closebtn" type="button">&times;</button></div>' +
+        '<div class="panel-body"></div>' +
       '</div>';
     stageEl.appendChild(overlay);
     requestAnimationFrame(function(){ overlay.classList.add("open"); });
 
-    var list = overlay.querySelector(".item-list");
+    var titleEl = overlay.querySelector(".panel-head h3");
+    var panelBody = overlay.querySelector(".panel-body");
 
-    function render(){
-      list.innerHTML = "";
-      data.items.forEach(function(item){
+    function close(){
+      overlay.classList.remove("open");
+      setTimeout(function(){ overlay.remove(); }, 250);
+    }
+    overlay.querySelector(".closebtn").addEventListener("click", close);
+
+    function renderItemList(items, title, onBack){
+      titleEl.textContent = title;
+      panelBody.innerHTML = "";
+
+      if(onBack){
+        var back = document.createElement("button");
+        back.type = "button";
+        back.className = "backbtn";
+        back.textContent = "← Folders";
+        back.addEventListener("click", onBack);
+        panelBody.appendChild(back);
+      }
+
+      if(items.length === 0){
+        var empty = document.createElement("p");
+        empty.className = "empty-note";
+        empty.textContent = "Nothing filed here yet.";
+        panelBody.appendChild(empty);
+      }
+
+      var list = document.createElement("div");
+      list.className = "item-list";
+      items.forEach(function(item){
         var group = document.createElement("div");
         group.className = "item-group";
 
@@ -533,14 +589,34 @@
         group.appendChild(detail);
         list.appendChild(group);
       });
+      panelBody.appendChild(list);
     }
-    render();
 
-    function close(){
-      overlay.classList.remove("open");
-      setTimeout(function(){ overlay.remove(); }, 250);
+    if(key === "cabinet"){
+      function renderFolders(){
+        titleEl.textContent = data.title;
+        panelBody.innerHTML = "";
+        var grid = document.createElement("div");
+        grid.className = "folder-list";
+        CABINET_FOLDERS.forEach(function(f){
+          var items = data.items.filter(function(it){ return (it.folder || CABINET_DEFAULT_FOLDER) === f.name; });
+          var card = document.createElement("button");
+          card.type = "button";
+          card.className = "folder-card";
+          card.innerHTML = '<span class="folder-icon">' + f.icon + '</span>' +
+            '<span class="folder-name">' + f.name + '</span>' +
+            '<span class="folder-count">' + items.length + (items.length === 1 ? " document" : " documents") + '</span>';
+          card.addEventListener("click", function(){
+            renderItemList(items, data.title + " – " + f.name, renderFolders);
+          });
+          grid.appendChild(card);
+        });
+        panelBody.appendChild(grid);
+      }
+      renderFolders();
+    } else {
+      renderItemList(data.items, data.title, null);
     }
-    overlay.querySelector(".closebtn").addEventListener("click", close);
   }
 
   function openCreatePanel(stageEl){
@@ -592,14 +668,14 @@
       var entry = getEntry();
       var fileBtn = overlay.querySelector(".file");
       fileBtn.disabled = true;
-      sb.rpc("shed_add_item", { p: window.SHED_PASSPHRASE, loc: "cabinet", ttl: entry.title, bdy: entry.body }).then(function(res){
+      sb.rpc("shed_add_item", { p: window.SHED_PASSPHRASE, loc: "cabinet", ttl: entry.title, bdy: entry.body, fld: "From the Desk" }).then(function(res){
         fileBtn.disabled = false;
         if(res.error){
           alert("Couldn't file that in the Cabinet. Please try again.");
           return;
         }
         var row = res.data;
-        CONTENT.cabinet.items.unshift({ id: row.id, title: row.title, body: row.body });
+        CONTENT.cabinet.items.unshift({ id: row.id, title: row.title, body: row.body, folder: row.folder });
         showOnDesk(stageEl, "Filed: " + entry.title, 'Added to the File Cabinet, under "From the Desk".');
         close();
       });
